@@ -19,9 +19,10 @@
  * use the src/config.js module for various constants. We can use the
  * AMP_CONFIG global to translate user-defined configurations to this
  * module.
- * @type {!Object<string, string>}
+ * @type {!Object<string, (string|boolean|RegExp)>}
  */
 const env = self.AMP_CONFIG || {};
+const DEFAULT_CDN = 'https://cdn.ampproject.org';
 
 const thirdPartyFrameRegex =
   typeof env['thirdPartyFrameRegex'] == 'string'
@@ -38,7 +39,10 @@ export const urls = {
   thirdParty: env['thirdPartyUrl'] || 'https://3p.ampproject.net',
   thirdPartyFrameHost: env['thirdPartyFrameHost'] || 'ampproject.net',
   thirdPartyFrameRegex: thirdPartyFrameRegex || /^d-\d+\.ampproject\.net$/,
-  cdn: env['cdnUrl'] || 'https://cdn.ampproject.org',
+  cdn: env['cdnUrl'] || DEFAULT_CDN,
+  cdnSupportsCacheModifiedExtensions:
+    env['cdnUrlSupportsCacheModifiedExtensions'] !== false,
+  defaultCdn: DEFAULT_CDN,
   /* Note that cdnProxyRegex is only ever checked against origins
    * (proto://host[:port]) so does not need to consider path
    */

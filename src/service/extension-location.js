@@ -15,6 +15,7 @@
  */
 
 import {getMode} from '../mode';
+import {isCacheModifiedExtension} from '../cache-modified-extensions';
 import {urls} from '../config';
 
 /**
@@ -32,15 +33,23 @@ let ExtensionInfoDef;
  * Calculate the base url for any scripts.
  * @param {!Location} location The window's location
  * @param {boolean=} opt_isLocalDev
+ * @param {boolean=} opt_useDefaultCdn
  * @return {string}
  */
-export function calculateScriptBaseUrl(location, opt_isLocalDev) {
+export function calculateScriptBaseUrl(
+  location,
+  opt_isLocalDev,
+  opt_useDefaultCdn
+) {
   if (opt_isLocalDev) {
     let prefix = `${location.protocol}//${location.host}`;
     if (location.protocol == 'about:') {
       prefix = '';
     }
     return `${prefix}/dist`;
+  }
+  if (opt_useDefaultCdn) {
+    return urls.defaultCdn;
   }
   return urls.cdn;
 }
@@ -59,7 +68,10 @@ export function calculateExtensionScriptUrl(
   opt_extensionVersion,
   opt_isLocalDev
 ) {
-  const base = calculateScriptBaseUrl(location, opt_isLocalDev);
+  const useDefaultCdn =
+    isCacheModifiedExtension(extensionId) &&
+    !urls.cdnSupportsCacheModifiedExtensions;
+  const base = calculateScriptBaseUrl(location, opt_isLocalDev, useDefaultCdn);
   const rtv = getMode().rtvVersion;
   if (opt_extensionVersion == null) {
     opt_extensionVersion = '0.1';
@@ -85,7 +97,7 @@ export function calculateEntryPointScriptUrl(
   isLocalDev,
   opt_rtv
 ) {
-  const base = calculateScriptBaseUrl(location, isLocalDev);
+  const base = calculateScriptBaseUrl(location, isLocalDev, false);
   if (opt_rtv) {
     return `${base}/rtv/${getMode().rtvVersion}/${entryPoint}.js`;
   }
