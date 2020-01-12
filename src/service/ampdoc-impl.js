@@ -31,6 +31,8 @@ import {isInAmpdocFieExperiment} from '../ampdoc-fie';
 import {map} from '../utils/object';
 import {parseQueryString} from '../url';
 import {rootNodeFor, waitForBodyOpenPromise} from '../dom';
+import {toArray} from '../types';
+import {urls} from '../config';
 
 /** @const {string} */
 const AMPDOC_PROP = '__AMPDOC';
@@ -81,6 +83,7 @@ export class AmpDocService {
     /** @private {?AmpDoc} */
     this.singleDoc_ = null;
     if (isSingleDoc) {
+      importMetaConfigUrls(win);
       this.singleDoc_ = new AmpDocSingle(win, {
         params: extractSingleDocParams(win, opt_initParams),
       });
@@ -981,6 +984,35 @@ function extractSingleDocParams(win, initParams) {
     }
   }
   return params;
+}
+
+/**
+ * Support limited updates to AMP.config.urls via <meta name="amp-config-urls-">
+ * @param {!Window} win
+ *
+ * Whitelisted for update: cdn, cdnSupportsCacheModifiedExtensions
+ */
+function importMetaConfigUrls(win) {
+  const head = win.document && win.document.head;
+  if (!head) {
+    return;
+  }
+  toArray(head.querySelectorAll('meta[name^="amp-config-urls-"]')).forEach(
+    tag => {
+      const name = tag.getAttribute('name').replace('amp-config-urls-', '');
+      if (name === 'cdn') {
+        const content = tag.getAttribute('content');
+        if (content) {
+          urls.cdn = content;
+        }
+      } else if (name === 'cdnSupportsCacheModifiedExtensions') {
+        const content = tag.getAttribute('content');
+        if (content === 'false') {
+          urls.cdnSupportsCacheModifiedExtensions = false;
+        }
+      }
+    }
+  );
 }
 
 /**
