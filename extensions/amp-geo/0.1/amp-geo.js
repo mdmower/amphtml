@@ -48,12 +48,13 @@ import {Services} from '../../../src/services';
 import {ampGeoPresets} from './amp-geo-presets';
 
 import {GEO_IN_GROUP} from './amp-geo-in-group';
-import {dev, userAssert} from '../../../src/log';
+import {dev, user, userAssert} from '../../../src/log';
 import {getMode} from '../../../src/mode';
 import {isArray, isObject} from '../../../src/types';
 import {isCanary} from '../../../src/experiments';
 import {isJsonScriptTag} from '../../../src/dom';
 import {tryParseJson} from '../../../src/json';
+import {urls} from '../../../src/config';
 
 /** @const */
 const TAG = 'amp-geo';
@@ -80,6 +81,7 @@ const mode = {
   GEO_HOT_PATCH: 0, // Default mode, geo is patched by GFE when js is served
   GEO_PRERENDER: 1, // We've been prerendered by an AMP Cache or publisher CMS
   GEO_OVERRIDE: 2, //  We've been overriden in test by #amp-geo=xx
+  GEO_USE_API: 3, //   Fallback mode, query API when cache patching unavailable
 };
 
 /**
@@ -161,6 +163,7 @@ export class AmpGeo extends AMP.BaseElement {
   /**
    * findCountry_, sets this.country_ and this.mode_
    * @param {!../../../src/service/ampdoc-impl.AmpDoc} ampdoc
+   * @return {Promise}
    */
   findCountry_(ampdoc) {
     // Flag to see if we've been pre-rendered with a country
@@ -199,14 +202,82 @@ export class AmpGeo extends AMP.BaseElement {
       this.mode_ = mode.GEO_HOT_PATCH;
       this.country_ = trimmedCountryMatch[1];
     } else if (trimmedCountryMatch[0] === '' && !getMode(this.win).localDev) {
-      // We were not patched, if we're not in dev this is an error
-      // and we leave the country at the default 'unknown'
-      this.error_ = true;
-      dev().error(
-        TAG,
-        'GEONOTPATCHED: amp-geo served unpatched, ISO country not set'
-      );
+      // We were not patched, fall back to API
+      this.mode_ = mode.GEO_USE_API;
     }
+
+    if (this.mode_ !== mode.GEO_USE_API) {
+      return Promise.resolve();
+    }
+
+    return this.fetchCountry_().then(country => {
+      if (country) {
+        this.country_ = country;
+      } else {
+        // if we're not in dev this is an error
+        // and we leave the country at the default 'unknown'
+        this.error_ = true;
+        dev().error(
+          TAG,
+          'GEONOTPATCHED: amp-geo served unpatched and API response not valid, ISO country not set'
+        );
+      }
+    });
+  }
+
+  /**
+   * Fetch country from API defined in config.urls
+   *
+   * JSON schema of response:
+   * {
+   *   "$schema": "http://json-schema.org/draft-07/schema#",
+   *   "type": "object",
+   *   "properties": {
+   *     "country": {
+   *       "type": "string",
+   *       "title": "ISO 3166-1 alpha-2 lowercase country code of client request",
+   *       "default": "",
+   *       "pattern": "^[a-z]{2}$"
+   *     }
+   *   },
+   *   "required": [
+   *     "country"
+   *   ]
+   * }
+   *
+   * Sample response:
+   * {
+   *   "country": "de"
+   * }
+   *
+   * @return {Promise<string>}
+   */
+  fetchCountry_() {
+    return Services.xhrFor(this.win)
+      .fetchJson(urls.geoApi, {
+        mode: 'cors',
+        method: 'GET',
+        ampCors: false,
+        credentials: 'omit',
+      })
+      .then(res => res.json())
+      .then(json => {
+        if (
+          typeof json.country !== 'string' ||
+          !/^[a-z]{2}$/.test(json.country)
+        ) {
+          user().error(
+            TAG,
+            'Invalid API response, expected schema not matched for property "country"'
+          );
+          return null;
+        }
+        return json.country;
+      })
+      .catch(reason => {
+        user().error(TAG, 'XHR country request failed', reason);
+        return null;
+      });
   }
 
   /**
@@ -306,7 +377,9 @@ export class AmpGeo extends AMP.BaseElement {
       .whenReady()
       .then(() => ampdoc.waitForBodyOpen())
       .then(body => {
-        self.findCountry_(ampdoc);
+        return self.findCountry_(ampdoc).then(() => body);
+      })
+      .then(body => {
         self.matchCountryGroups_(config);
 
         let classesToRemove = [];
@@ -316,6 +389,7 @@ export class AmpGeo extends AMP.BaseElement {
             classesToRemove = self.clearPreRender_(body);
           // Intentionally fall through.
           case mode.GEO_HOT_PATCH:
+          case mode.GEO_USE_API:
             // Build the AMP State, add classes
             states.ISOCountry = self.country_;
 

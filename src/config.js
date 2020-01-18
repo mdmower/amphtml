@@ -22,6 +22,7 @@
  * @type {!Object<string, string>}
  */
 const env = self.AMP_CONFIG || {};
+const DEFAULT_CDN = 'https://cdn.ampproject.org';
 
 const thirdPartyFrameRegex =
   typeof env['thirdPartyFrameRegex'] == 'string'
@@ -38,7 +39,7 @@ export const urls = {
   thirdParty: env['thirdPartyUrl'] || 'https://3p.ampproject.net',
   thirdPartyFrameHost: env['thirdPartyFrameHost'] || 'ampproject.net',
   thirdPartyFrameRegex: thirdPartyFrameRegex || /^d-\d+\.ampproject\.net$/,
-  cdn: env['cdnUrl'] || 'https://cdn.ampproject.org',
+  cdn: env['cdnUrl'] || DEFAULT_CDN,
   /* Note that cdnProxyRegex is only ever checked against origins
    * (proto://host[:port]) so does not need to consider path
    */
@@ -61,6 +62,8 @@ export const urls = {
     /(^|\.)google\.(com?|[a-z]{2}|com?\.[a-z]{2}|cat)$/,
     /(^|\.)gmail\.(com|dev)$/,
   ],
+  // Fallback API if amp-geo is left unpatched
+  geoApi: env['geoApiUrl'] || (DEFAULT_CDN + '/geo-api-0.1.json'),
 };
 
 export const config = {
