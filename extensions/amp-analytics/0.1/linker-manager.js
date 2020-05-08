@@ -234,7 +234,7 @@ export class LinkerManager {
 
     const headNode = this.ampdoc_.getHeadNode();
     const linkerCreatedEl =
-      headNode instanceof ShadowRoot
+      headNode.toString() === '[object ShadowRoot]'
         ? this.ampdoc_.getBody()
         : headNode.querySelector(
             'meta[name="amp-google-client-id-api"][content="googleanalytics"]'
